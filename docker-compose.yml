@@ -1,0 +1,54 @@
+version: '3.9'
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: aether_db
+      POSTGRES_USER: aether
+      POSTGRES_PASSWORD: aether_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql+asyncpg://aether:aether_pass@postgres:5432/aether_db
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_URL: http://ollama:11434
+    depends_on:
+      - redis
+      - postgres
+      - qdrant
+      - ollama
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+volumes:
+  pg_data:
+  qdrant_data:
