@@ -1,20 +1,40 @@
+import logging
 import httpx
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 class OllamaLLM:
-    async def generate(self, prompt: str) -> str:
-        url = f"{settings.ollama_url}/api/completions"
+    def __init__(self):
+        self.base_url = settings.ollama_url
+        # Use model available in Ollama container; pull llama2 in Docker Compose setup
+        self.model = "llama3"
+
+    async def generate(self, prompt: str, max_tokens: int = 512) -> str:
+        """Generate text using Ollama LLM."""
+        url = f"{self.base_url}/api/generate"
         payload = {
-            "model": "llama2",
+            "model": self.model,
             "prompt": prompt,
-            "max_tokens": 400,
-            "temperature": 0.2,
+            "stream": False,
+            "options": {
+                "temperature": 0.2,
+                "num_predict": max_tokens,
+                "top_p": 0.9,
+            }
         }
-        async with httpx.AsyncClient() as client:
-            r = await client.post(url, json=payload, timeout=60.0)
-            r.raise_for_status()
-            data = r.json()
-            if "choices" in data and len(data["choices"]) > 0:
-                return data["choices"][0].get("text", "")
-            return ""
+        
+        try:
+            logger.info(f"LLM request: model={self.model}, prompt_len={len(prompt)}, max_tokens={max_tokens}")
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                result = data.get("response", "").strip()
+                duration = data.get("total_duration", 0) / 1e9  # nanoseconds to seconds
+                logger.info(f"LLM response: {len(result)} chars, duration={duration:.1f}s")
+                return result
+        except Exception as e:
+            logger.error(f"LLM error: {e}")
+            return f"LLM Error: {str(e)}"

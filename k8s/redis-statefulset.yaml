@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: aether
+data:
+  redis.conf: |
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+    appendonly yes
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: aether-redis
+  namespace: aether
+spec:
+  serviceName: aether-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aether-redis
+  template:
+    metadata:
+      labels:
+        app: aether-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /usr/local/etc/redis
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+      volumes:
+      - name: config
+        configMap:
+          name: redis-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aether-redis
+  namespace: aether
+spec:
+  clusterIP: None
+  selector:
+    app: aether-redis
+  ports:
+  - port: 6379
+    targetPort: 6379

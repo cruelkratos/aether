@@ -1,12 +1,22 @@
 import asyncio
-from app.database import engine
-from sqlalchemy import text
+import os
+import sys
 
-async def init():
+# Ensure the repository root is on Python path when running script directly
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+from app.database import engine
+from app.models import Base
+
+
+async def init_db():
+    """Initialize database tables."""
     async with engine.begin() as conn:
-        await conn.execute(text("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW())"))
-        await conn.execute(text("CREATE TABLE IF NOT EXISTS events (id SERIAL PRIMARY KEY, session_id TEXT, event_type TEXT, payload JSONB, created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW())"))
-    print("Database initialized")
+        await conn.run_sync(Base.metadata.create_all)
+    print("✓ Database tables created successfully")
+
 
 if __name__ == "__main__":
-    asyncio.run(init())
+    asyncio.run(init_db())
