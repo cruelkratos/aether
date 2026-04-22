@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Tuple
 from app.config import settings
 from app.agent.tool_registry import ToolRegistry
 from app.agent.llm_interface import OllamaLLM
+from app.agent.llm_interface import AzureOpenAILLM
 from app.memory.memory_handler import MemoryHandler
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 class AgentLoop:
     def __init__(self):
         self.tools = ToolRegistry()
-        self.llm = OllamaLLM()
+        self.llm = AzureOpenAILLM()
         self.memory = MemoryHandler()
         self.max_iterations = settings.agent_max_iterations
 

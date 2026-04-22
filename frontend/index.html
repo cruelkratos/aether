@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aether - AI Agent</title>
     <style>
+        :root {
+            --bg-color: #ffffff;
+            --chat-bg: #f9fafb;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --user-bubble: #f3f4f6;
+            --accent-color: #000000;
+            --accent-hover: #374151;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,216 +26,307 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 900px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            height: 90vh;
-            max-height: 800px;
+            overflow: hidden;
         }
 
+        /* --- Navbar / Header --- */
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px 12px 0 0;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            z-index: 10;
         }
 
-        .header h1 {
-            font-size: 28px;
-            margin-bottom: 5px;
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .header p {
-            opacity: 0.9;
-            font-size: 14px;
+        .brand h1 {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.025em;
+        }
+
+        .brand p {
+            display: none; /* Hidden for cleaner UI, could be restored if needed */
         }
 
         .session-info {
-            padding: 15px 20px;
-            background: #f5f5f5;
-            border-bottom: 1px solid #e0e0e0;
-            font-size: 12px;
-            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 13px;
+            color: var(--text-muted);
         }
 
         .session-id {
-            font-family: monospace;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background: var(--chat-bg);
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+        }
+
+        /* --- Buttons --- */
+        button {
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+
+        .button-secondary {
+            color: var(--text-main);
+            font-size: 13px;
+            font-weight: 500;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
             background: white;
-            padding: 3px 8px;
-            border-radius: 4px;
-            margin: 0 5px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .button-secondary:hover {
+            background: var(--chat-bg);
+        }
+
+        /* --- Chat Layout --- */
+        .container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+            position: relative;
         }
 
         .chat-container {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 40px 20px 120px 20px; /* Extra bottom padding for floating input */
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 24px;
+            align-items: center;
+            scroll-behavior: smooth;
         }
 
+        /* --- Messages --- */
         .message {
+            width: 100%;
+            max-width: 800px;
             display: flex;
-            gap: 10px;
-            animation: slideIn 0.3s ease-out;
+            gap: 16px;
+            animation: fadeIn 0.4s ease-out forwards;
+            opacity: 0;
+            transform: translateY(10px);
         }
 
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
+        @keyframes fadeIn {
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
         }
 
-        .message.user {
-            justify-content: flex-end;
+        .message-content {
+            flex: 1;
+            line-height: 1.6;
+            font-size: 15px;
+            word-wrap: break-word;
         }
 
-        .message-content {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 8px;
-            word-wrap: break-word;
-            line-height: 1.4;
+        /* User Message */
+        .message.user {
+            flex-direction: row-reverse;
         }
 
         .message.user .message-content {
-            background: #667eea;
-            color: white;
-            border-bottom-right-radius: 0;
+            background: var(--user-bubble);
+            padding: 12px 18px;
+            border-radius: 18px;
+            max-width: 80%;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* Assistant Message */
+        .message.assistant {
+            flex-direction: row;
+        }
+
+        .message.assistant::before {
+            content: '';
+            display: block;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background-color: var(--accent-color);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'/%3E%3C/svg%3E");
+            background-size: 16px;
+            background-position: center;
+            background-repeat: no-repeat;
+            flex-shrink: 0;
         }
 
         .message.assistant .message-content {
-            background: #f0f0f0;
-            color: #333;
-            border-bottom-left-radius: 0;
+            padding: 4px 0;
+            color: var(--text-main);
+            max-width: 90%;
+        }
+
+        /* System/Tool Message */
+        .message.system {
+            justify-content: center;
+            margin: 10px 0;
         }
 
         .message.system .message-content {
-            background: #fff3cd;
-            color: #856404;
-            border-bottom-left-radius: 0;
-            font-size: 13px;
-        }
-
-        .tool-call {
-            background: #e3f2fd;
-            border-left: 4px solid #667eea;
-            padding: 10px;
-            margin-top: 8px;
-            border-radius: 4px;
+            background: var(--chat-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
             font-size: 12px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: auto;
         }
 
-        .tool-call strong {
-            color: #667eea;
-        }
-
+        /* --- Input Area --- */
         .input-container {
-            padding: 20px;
-            border-top: 1px solid #e0e0e0;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 30%);
+            padding: 30px 20px 40px 20px;
             display: flex;
-            gap: 10px;
+            justify-content: center;
+            pointer-events: none; /* Lets you click through the gradient */
         }
 
         .input-field {
-            flex: 1;
+            width: 100%;
+            max-width: 800px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 8px 8px 8px 24px;
             display: flex;
-            gap: 10px;
+            gap: 12px;
+            box-shadow: var(--shadow-md);
+            pointer-events: auto; /* Restores clicking for the actual input box */
+            transition: border-color 0.2s, box-shadow 0.2s;
+            align-items: center;
+        }
+
+        .input-field:focus-within {
+            border-color: #d1d5db;
+            box-shadow: var(--shadow-lg);
         }
 
         input[type="text"] {
             flex: 1;
-            padding: 12px 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            font-family: inherit;
-            transition: border-color 0.2s;
-        }
-
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        button {
-            padding: 12px 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
             border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            white-space: nowrap;
+            outline: none;
+            font-size: 15px;
+            background: transparent;
+            font-family: inherit;
+            color: var(--text-main);
+            padding: 8px 0;
         }
 
-        button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+        input[type="text"]::placeholder {
+            color: #9ca3af;
         }
 
-        button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .button-group {
+        #sendBtn {
+            background: var(--accent-color);
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
             display: flex;
-            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
 
-        .button-secondary {
-            background: #f0f0f0;
-            color: #333;
-            font-size: 13px;
-            padding: 10px 16px;
+        #sendBtn:hover:not(:disabled) {
+            background: var(--accent-hover);
+            transform: scale(1.05);
         }
 
-        .button-secondary:hover {
-            background: #e0e0e0;
+        #sendBtn:disabled {
+            background: #e5e7eb;
+            color: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
         }
 
+        /* Using SVG for the send button arrow */
+       #sendBtn::after {
+            content: '';
+            display: block;
+            width: 16px;
+            height: 16px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='19' x2='12' y2='5'%3E%3C/line%3E%3Cpolyline points='5 12 12 5 19 12'%3E%3C/polyline%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+        }
+
+        /* Update the arrow color when the button is disabled */
+        #sendBtn:disabled::after {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='19' x2='12' y2='5'%3E%3C/line%3E%3Cpolyline points='5 12 12 5 19 12'%3E%3C/polyline%3E%3C/svg%3E");
+        }
+
+        .clear-btn {
+            position: absolute;
+            right: -60px;
+            bottom: 12px;
+            background: white;
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            border-radius: 50%;
+            color: var(--text-muted);
+            box-shadow: var(--shadow-sm);
+            pointer-events: auto;
+        }
+        
+        .clear-btn:hover {
+            color: var(--text-main);
+            background: var(--chat-bg);
+        }
+
+        /* --- Loading Animation --- */
         .loading {
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 13px;
-            color: #666;
-            padding: 12px 16px;
-            background: #f9f9f9;
-            border-radius: 8px;
+            font-size: 14px;
+            color: var(--text-muted);
         }
 
         .spinner {
             display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 3px solid #f0f0f0;
-            border-top: 3px solid #667eea;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border-color);
+            border-top: 2px solid var(--accent-color);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
@@ -230,50 +335,49 @@
             to { transform: rotate(360deg); }
         }
 
-        .error {
-            background: #ffebee;
-            border-left: 4px solid #f44336;
-            color: #c62828;
-        }
-
-        .success {
-            background: #e8f5e9;
-            border-left: 4px solid #4caf50;
-            color: #2e7d32;
-        }
-
-        @media (max-width: 600px) {
-            .container {
-                max-height: 100vh;
-                border-radius: 0;
+        /* --- Responsive Design --- */
+        @media (max-width: 860px) {
+            .clear-btn {
+                position: relative;
+                right: 0;
+                bottom: 0;
+                border-radius: 12px;
+                padding: 10px 16px;
             }
-
-            .message-content {
-                max-width: 95%;
+            .input-container {
+                flex-direction: column;
+                align-items: center;
+                gap: 12px;
             }
-
-            .header h1 {
-                font-size: 22px;
+            .input-field {
+                max-width: 100%;
+            }
+            .message {
+                max-width: 100%;
+            }
+            .message.user .message-content {
+                max-width: 90%;
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🤖 Aether AI Agent</h1>
-            <p>Chat with an intelligent agent that can use tools and search the web</p>
+    <div class="header">
+        <div class="brand">
+            <h1>Aether</h1>
+            <p>AI Agent</p>
         </div>
-
         <div class="session-info">
-            Session ID: <span class="session-id" id="sessionId">Loading...</span>
-            <button class="button-secondary" onclick="newSession()" style="float: right; margin-top: -5px;">New Session</button>
+            <span>Session: <span class="session-id" id="sessionId">Loading...</span></span>
+            <button class="button-secondary" onclick="newSession()">New Session</button>
         </div>
+    </div>
 
+    <div class="container">
         <div class="chat-container" id="chatContainer">
             <div class="message system">
                 <div class="message-content">
-                    👋 Welcome to Aether! Ask me anything. I can search the web, query databases, and more!
+                    👋 Welcome to Aether. Ask me anything.
                 </div>
             </div>
         </div>
@@ -283,13 +387,15 @@
                 <input 
                     type="text" 
                     id="userInput" 
-                    placeholder="Ask me anything... (press Enter to send)" 
+                    placeholder="Message Aether..." 
                     onkeypress="handleKeyPress(event)"
                     disabled
                 >
-                <button onclick="sendMessage()" id="sendBtn" disabled>Send</button>
+                <button onclick="sendMessage()" id="sendBtn" disabled></button>
             </div>
-            <button class="button-secondary" onclick="clearChat()">Clear</button>
+            <button class="clear-btn" onclick="clearChat()" title="Clear Chat">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+            </button>
         </div>
     </div>
 
