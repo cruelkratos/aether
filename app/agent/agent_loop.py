@@ -52,7 +52,7 @@ Available tools:
 Tool descriptions:
 - web_search: Search the internet for current information, news, facts, scores, events.
 - web_crawl: Fetch and read the full content of a specific URL.
-- sql_query: Run a read-only SQL SELECT query against the database.
+- sql_query: Run a SQL query against the database.
 - api_call: Call an external REST API endpoint.
 - python_exec: Execute Python code for calculations, data processing, math, conversions, string manipulation, or any computation. Use this whenever the user asks you to calculate, compute, convert, or process something.
 
