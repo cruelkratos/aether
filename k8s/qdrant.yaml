@@ -5,6 +5,7 @@ metadata:
   namespace: aether
 spec:
   accessModes: ["ReadWriteOnce"]
+  storageClassName: gp3
   resources:
     requests:
       storage: 10Gi
@@ -24,6 +25,13 @@ spec:
       labels:
         app: qdrant
     spec:
+      tolerations:
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "karpenter.sh/disrupted"
+          operator: "Exists"
+          effect: "NoSchedule"
       containers:
         - name: qdrant
           image: qdrant/qdrant:latest
