@@ -2,7 +2,7 @@
 
 An AI agent you can actually talk to across sessions. Ask it something, and it figures out what tools it needs — web search, database queries, code execution, or external APIs — runs them, and chains the results into a coherent answer. It remembers what you told it last week.
 
-Built with FastAPI, Redis, PostgreSQL, Qdrant, and Ollama (or OpenAI if you prefer). Runs locally with Docker Compose or on AWS EKS for production.
+Built with FastAPI, Redis, PostgreSQL, Qdrant, and Ollama (and Azure OpenAI). Runs locally with Docker Compose or on AWS EKS for production.
 
 ---
 
@@ -26,7 +26,7 @@ The agent loop itself is a straightforward implementation — the LLM sees the u
 You need Docker Desktop and Docker Compose. That's it.
 
 ```bash
-git clone <repo> && cd aether
+git clone https://github.com/cruelkratos/aether.git && cd aether
 docker-compose up -d --build
 docker-compose exec api python scripts/init_db.py
 ```
