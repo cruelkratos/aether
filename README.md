@@ -1,66 +1,55 @@
-# Aether: Cloud-Native AI Agent with Tool Use and Memory
+# Aether
 
-A production-ready AI agent system that leverages external tools (web search, SQL queries, Python code execution, REST APIs) with persistent memory across sessions.
+An AI agent you can actually talk to across sessions. Ask it something, and it figures out what tools it needs — web search, database queries, code execution, or external APIs — runs them, and chains the results into a coherent answer. It remembers what you told it last week.
 
-## 🎯 Features
+Built with FastAPI, Redis, PostgreSQL, Qdrant, and Ollama (or OpenAI if you prefer). Runs locally with Docker Compose or on AWS EKS for production.
 
-- **Agent Loop**: Reasoning engine with multi-step tool calling
-- **Tool Registry**: 4 integrated tools - web search, SQL executor, Python sandbox, API caller
-- **Multi-Layer Memory**:
-  - Redis: Short-term session cache (24h)
-  - PostgreSQL: Long-term conversation history
-  - Qdrant: Vector semantic search for context retrieval
-- **Web UI**: Interactive chat frontend
-- **REST API**: Session-based agent access
-- **Security**: Tool call sandboxing, input validation, whitelist enforcement
-- **Monitoring**: Metrics endpoint, logging, performance tracking
+---
 
-## 🚀 Quick Start
+## What it does
 
-### Prerequisites (Install on Your Machine)
+Most LLM demos answer questions in isolation. Aether keeps state. Every session has a memory stack: recent messages live in Redis, older history gets summarized into PostgreSQL, and everything is embedded into Qdrant so the agent can pull relevant context back up when it matters.
 
-**System Tools:**
-- Docker Desktop (version 20.10+)
-- Docker Compose (version 2.0+)
-- Git
+The agent loop itself is a straightforward implementation — the LLM sees the user message plus available tools, picks one, runs it, gets the result back, and repeats until it's confident enough to respond. No magic, just iteration.
 
-**Optional Local Development:**
-- Python 3.11+
-- pip
+**The four tools:**
 
-**Cloud (AWS) Tools:**
-- AWS CLI
-- kubectl
-- eksctl
-- helm (optional)
+- **Web search** via DuckDuckGo — for anything current
+- **SQL runner** — SELECT queries only, against the bundled PostgreSQL instance
+- **Python sandbox** — runs arbitrary code with a whitelist of safe imports, 30s timeout
+- **HTTP caller** — GET/POST/PUT/DELETE against external APIs, with SSRF protection
 
-### Local Deployment (Docker Compose)
+---
+
+## Running it locally
+
+You need Docker Desktop and Docker Compose. That's it.
 
 ```bash
-# Clone and navigate
 git clone <repo> && cd aether
-
-# Start all services
 docker-compose up -d --build
-
-# Initialize database
 docker-compose exec api python scripts/init_db.py
-
-# Verify services
-docker-compose ps
-
-# Access frontend
-open http://localhost:8000
 ```
 
-All 5 services start in the background:
-- **API** (port 8000) - FastAPI with Uvicorn
-- **Ollama** (port 11434) - Local LLM service (llama2)
-- **PostgreSQL** (port 5432) - Conversation history
-- **Redis** (port 6379) - Session cache
-- **Qdrant** (port 6333) - Vector DB for semantic search
+Five services come up:
 
-### Stop Services
+| Service    | Port  | What it is                          |
+|------------|-------|--------------------------------------|
+| API        | 8000  | FastAPI + Uvicorn                   |
+| Ollama     | 11434 | Local LLM (llama2 by default)       |
+| PostgreSQL | 5432  | Conversation history                |
+| Redis      | 6379  | Short-term session cache            |
+| Qdrant     | 6333  | Vector DB for semantic retrieval    |
+
+Open `http://localhost:8000` for the chat UI.
+
+The first time Ollama starts, it pulls the model — give it a minute. You can check progress with:
+
+```bash
+docker exec aether-ollama-1 ollama list
+```
+
+To stop everything:
 
 ```bash
 docker-compose down
@@ -68,202 +57,111 @@ docker-compose down
 
 ---
 
-## 📊 API Endpoints
+## API
 
-### Session Management
+Sessions are the core abstraction. Create one, query it, come back later.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/sessions/create` | Create new session |
-| POST | `/sessions/{id}/query` | Send query to agent |
+```bash
+# Start a session
+curl -X POST http://localhost:8000/sessions/create
+
+# Ask the agent something
+curl -X POST http://localhost:8000/sessions/{SESSION_ID}/query \
+  -H "Content-Type: application/json" \
+  -d '{"user_prompt": "What Python libraries are best for time series forecasting?"}'
+
+# Pull the full conversation history
+curl http://localhost:8000/sessions/{SESSION_ID}/history
+```
+
+**All endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/sessions/create` | Create a new session |
+| POST | `/sessions/{id}/query` | Send a message |
 | GET | `/sessions/{id}/history` | Get conversation history |
 | POST | `/sessions/{id}/reset` | Clear session memory |
 | DELETE | `/sessions/{id}` | Delete session |
 | GET | `/health/liveness` | Liveness probe |
 | GET | `/health/readiness` | Readiness probe |
-| GET | `/metrics` | System metrics |
-
-### Example: Create Session and Query
-
-```bash
-# Create session
-curl -X POST http://localhost:8000/sessions/create
-
-# Query agent
-curl -X POST http://localhost:8000/sessions/{SESSION_ID}/query \
-  -H "Content-Type: application/json" \
-  -d '{"user_prompt":"What is Python?"}'
-
-# Get history
-curl http://localhost:8000/sessions/{SESSION_ID}/history
-```
+| GET | `/metrics` | Query counts, success rates, latency |
 
 ---
 
-## 🔧 Tools Available
+## How memory works
 
-### 1. Web Search (DuckDuckGo)
+There are three layers, each serving a different purpose:
+
+1. **Redis** — the last 20 messages, with a 24-hour TTL. Fast access for active conversations.
+2. **PostgreSQL** — full structured history. Survives restarts, queryable.
+3. **Qdrant** — embeddings for every message. When the agent builds context for a new query, it retrieves semantically similar past exchanges regardless of how long ago they happened.
+
+At query time, the agent pulls from all three layers and builds a prompt that includes relevant history. This is how it "remembers" something you mentioned two sessions ago.
+
+---
+
+## Tool reference
+
+**Web search**
 ```json
-{
-  "tool": "web_search",
-  "query": "latest AI news"
-}
+{ "tool": "web_search", "query": "OpenAI GPT-5 release date" }
 ```
-Returns: Search results, abstracts, related topics
 
-### 2. SQL Query Executor
+**SQL query** (SELECT only, 10s timeout)
 ```json
-{
-  "tool": "sql_query",
-  "query": "SELECT * FROM users LIMIT 10"
-}
+{ "tool": "sql_query", "query": "SELECT * FROM sessions ORDER BY created_at DESC LIMIT 5" }
 ```
-- Only SELECT queries allowed
-- Connected to PostgreSQL
-- 10-second timeout
 
-### 3. Python Executor (Sandbox)
+**Python execution** (whitelisted imports, 30s timeout, no file I/O)
 ```json
-{
-  "tool": "python_exec",
-  "code": "print(sum([1,2,3]))"
-}
+{ "tool": "python_exec", "code": "import math\nprint(math.factorial(10))" }
 ```
-- Whitelisted imports: math, json, re, datetime, collections, etc.
-- 30-second timeout
-- No file I/O or system commands
 
-### 4. REST API Caller
+**HTTP API call** (SSRF-protected, 15s timeout)
 ```json
 {
   "tool": "api_call",
-  "url": "https://jsonplaceholder.typicode.com/posts/1",
+  "url": "https://api.github.com/repos/anthropics/anthropic-sdk-python",
   "method": "GET"
 }
 ```
-- HTTP GET/POST/PUT/DELETE/PATCH
-- 15-second timeout
-- SSRF protection with whitelisting
 
 ---
 
-## 🧪 Testing
+## Running tests
 
-### Run All Tests
 ```bash
-# Inside container
+# Inside Docker (recommended — matches the actual runtime environment)
 docker-compose exec api pytest -v
 
-# On host
-set PYTHONPATH=%cd%
-pytest -v
+# With coverage report
+docker-compose exec api pytest --cov=app --cov-report=html
+
+# On your host machine
+pip install -r requirements.txt
+PYTHONPATH=. pytest -v
 ```
 
-### Test Files
-- `tests/test_basic.py` - Health checks
-- `tests/test_api.py` - Session API endpoints
-- `tests/test_tools.py` - Individual tool functionality
-- `tests/test_agent.py` - Agent loop and memory
+Test files:
+- `tests/test_basic.py` — health checks and service availability
+- `tests/test_api.py` — session lifecycle, query handling
+- `tests/test_tools.py` — each tool individually
+- `tests/test_agent.py` — agent loop, memory integration, end-to-end flows
 
-### Test Coverage
-- 15+ API endpoint tests
-- 8+ tool execution tests
-- Agent loop with memory integration tests
-- End-to-end workflow tests
+
+View Output samples in the testsuite folder to see how the ai agent behaves
 
 ---
 
-## 💾 Architecture
-
-### Request Flow
-```
-User Query → Session API → Agent Loop → Memory Handler
-     ↓
-Tool Registry → (Web Search | SQL | Python | API) → Memory Layers
-     ↓
-Response → Session History → User
-```
-
-### Memory Layers
-1. **Redis Cache**: Last 20 messages, 24h TTL
-2. **PostgreSQL**: Full history, structured queries
-3. **Qdrant**: Embeddings for semantic search
-
-### Agent Reasoning
-1. Retrieve context from all memory layers
-2. Build prompt with available tools
-3. Call LLM (Ollama/OpenAI)
-4. Parse tool selection from response
-5. Execute tool (with safety checks)
-6. Update memory with result
-7. Repeat until final answer
-
----
-
-## 🛠️ Configuration
-
-### Environment Variables (`.env`)
-```
-REDIS_URL=redis://redis:6379
-DATABASE_URL=postgresql+asyncpg://aether:aether_pass@postgres:5432/aether_db
-QDRANT_URL=http://qdrant:6333
-OLLAMA_URL=http://ollama:11434
-```
-
-### Docker Compose Override
-Edit `docker-compose.yml` to:
-- Change Ollama model: Update `ollama` service
-- Adjust resource limits: Add `deploy: resources`
-- Use external databases: Update environment variables
-
----
-
-## ☁️ Cloud Deployment (AWS EKS)
-
-### Preparation
-1. Install AWS CLI and eksctl
-2. Configure AWS credentials
-3. Have Docker image pushed to ECR
-
-### Deploy to EKS
-```bash
-# Create cluster (one-time)
-eksctl create cluster --name aether-prod --region us-east-1
-
-# Deploy services
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/secrets.yaml
-kubectl apply -f k8s/postgres-statefulset.yaml
-kubectl apply -f k8s/redis-statefulset.yaml
-kubectl apply -f k8s/qdrant-deployment.yaml
-kubectl apply -f k8s/agent-api-deployment.yaml
-kubectl apply -f k8s/ingress.yaml
-
-# Monitor deployment
-kubectl get pods -n aether
-kubectl logs -n aether deployment/aether-api
-```
-
-### Production Changes
-- Ollama → OpenAI API (set in config)
-- PostgreSQL → AWS RDS
-- Redis → AWS ElastiCache
-- Qdrant → Keep in-cluster or Pinecone
-- Add horizontal autoscaling
-- Add ingress/load balancer
-- Configure SSL/TLS
-
----
-
-## 📝 Project Structure
+## Project layout
 
 ```
 aether/
 ├── app/
-│   ├── main.py              # FastAPI app
-│   ├── config.py            # Settings
-│   ├── models.py            # SQLAlchemy models
-│   ├── logging_utils.py     # Logging & metrics
+│   ├── main.py
+│   ├── config.py
+│   ├── models.py
 │   ├── api/
 │   │   ├── session_routes.py
 │   │   └── models.py
@@ -276,203 +174,129 @@ aether/
 │   │       ├── sql_executor.py
 │   │       ├── python_executor.py
 │   │       └── api_caller.py
-│   ├── memory/
-│   │   ├── memory_handler.py
-│   │   ├── redis_layer.py
-│   │   ├── postgres_layer.py
-│   │   └── qdrant_layer.py
-│   └── database.py
+│   └── memory/
+│       ├── memory_handler.py
+│       ├── redis_layer.py
+│       ├── postgres_layer.py
+│       └── qdrant_layer.py
 ├── frontend/
-│   └── index.html           # Web UI
+│   └── index.html
 ├── scripts/
 │   ├── init_db.py
 │   └── seed_db.py
 ├── tests/
-│   ├── test_basic.py
-│   ├── test_api.py
-│   ├── test_tools.py
-│   └── test_agent.py
-├── k8s/                     # Kubernetes manifests
+├── k8s/
 ├── docker-compose.yml
 ├── Dockerfile
-├── requirements.txt
-└── README.md
+└── requirements.txt
 ```
 
 ---
 
-## 🔐 Security & Limitations
+## Deploying to AWS EKS
 
-### Security Measures
-- Tool call sandboxing (Python subprocess timeout)
-- SQL whitelist (SELECT only, no DDL/DML)
-- API whitelist (SSRF protection)
-- Input validation on all endpoints
-- CORS configured for frontend
+For production, you'll want to swap a few things: Ollama → OpenAI API, local PostgreSQL → RDS, local Redis → ElastiCache. The Kubernetes manifests in `k8s/` are written with this in mind.
 
-### Known Limitations
-- Single Ollama instance (no load balancing local)
-- In-memory session store (use PostgreSQL in prod)
-- Python sandboxing is basic (use Docker/Firecracker in prod)
-- No auth on API (implement JWT/API keys in prod)
-- Embedding generation is hash-based (use OpenAI/Hugging Face in prod)
+**One-time cluster setup:**
+```bash
+eksctl create cluster --name aether-prod --region us-east-1
+```
+
+**Deploy:**
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/postgres-statefulset.yaml
+kubectl apply -f k8s/redis-statefulset.yaml
+kubectl apply -f k8s/qdrant-deployment.yaml
+kubectl apply -f k8s/agent-api-deployment.yaml
+kubectl apply -f k8s/ingress.yaml
+```
+
+**Check status:**
+```bash
+kubectl get pods -n aether
+kubectl logs -n aether deployment/aether-api
+```
+
+What changes in prod vs local:
+- LLM: set `OPENAI_API_KEY` and update `llm_interface.py` to point at OpenAI
+- PostgreSQL → AWS RDS (update `DATABASE_URL` in secrets)
+- Redis → AWS ElastiCache (update `REDIS_URL`)
+- Add horizontal pod autoscaling for the API deployment
+- Configure SSL/TLS through the ingress
 
 ---
 
-## 📊 Monitoring
+## Configuration
 
-### Health Checks
-```bash
-curl http://localhost:8000/health/liveness
-curl http://localhost:8000/health/readiness
+All configuration lives in `.env`:
+
+```env
+REDIS_URL=redis://redis:6379
+DATABASE_URL=postgresql+asyncpg://aether:aether_pass@postgres:5432/aether_db
+QDRANT_URL=http://qdrant:6333
+OLLAMA_URL=http://ollama:11434
 ```
 
-### Metrics
+To use a larger Ollama model, update the `ollama` service in `docker-compose.yml` and pull the model:
 ```bash
-curl http://localhost:8000/metrics
-```
-
-Returns:
-```json
-{
-  "queries_total": 42,
-  "queries_success": 40,
-  "success_rate": 95.2,
-  "avg_query_duration": 3.2,
-  "active_sessions": 5,
-  "tools_total": 15,
-  "tools_success": 13
-}
+docker exec aether-ollama-1 ollama pull llama2:13b
 ```
 
 ---
 
-## 🧑‍💻 Development
+## Adding a new tool
 
-### Install Dependencies (Host)
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### Run Tests on Host
-```bash
-set PYTHONPATH=%cd%
-pytest -v
-```
-
-### Run API Directly
-```bash
-uvicorn app.main:app --reload --port 8000
-```
-
-### Add New Tool
-1. Create `app/agent/tools/your_tool.py`
-2. Implement async function: `async def your_tool(**kwargs) -> dict`
-3. Register in `app/agent/tool_registry.py`
-4. Add tests in `tests/test_tools.py`
+1. Create `app/agent/tools/your_tool.py` with an async function:
+   ```python
+   async def your_tool(**kwargs) -> dict:
+       ...
+   ```
+2. Register it in `app/agent/tool_registry.py`
+3. Add tests in `tests/test_tools.py`
 
 ---
 
-## 📈 Performance Tips
+## Known limitations
 
-- **Increase Ollama replicas** for concurrent requests
-- **Use larger LLM model** for better reasoning (llama2-13b)
-- **Cache embeddings** in Redis for repeated queries
-- **Reduce context window** to speed up LLM calls
-- **Use CloudFront** for static frontend assets
+A few things that are intentionally simplified for now:
+
+- **No authentication** — the API is open. Add JWT or API keys before exposing this publicly.
+- **Python sandboxing is basic** — subprocess with a timeout and import whitelist. For real isolation, use Firecracker or a separate container per execution.
+- **Single Ollama instance** — no load balancing for local LLM inference.
+- **Hash-based embeddings** — the current embedding generation is a placeholder. Swap in OpenAI embeddings or a Hugging Face model for meaningful semantic search.
+- **In-memory session store** — the session index lives in memory; use PostgreSQL for this in production.
 
 ---
 
-## 🐛 Troubleshooting
 
-### Container won't start
+
+## Troubleshooting
+
+**Container won't start**
 ```bash
 docker-compose logs api --tail=50
 ```
 
-### API connection refused
+**Port 8000 already in use**
 ```bash
-# Check if port 8000 is available
-netstat -an | grep 8000
-# Or just wait for container startup (takes 10-15s)
+# Check what's on the port
+lsof -i :8000  # macOS/Linux
+netstat -ano | findstr :8000  # Windows
 ```
 
-### Ollama timeout
-- Model is downloading: `docker exec aether-ollama-1 ollama list`
-- Pull model: `docker exec aether-ollama-1 ollama pull llama2`
+**Ollama times out on first query**
+The model is probably still downloading. Check with `docker exec aether-ollama-1 ollama list` and wait for it to finish.
 
-### Database connection errors
+**Database connection errors**
 ```bash
-# Check PostgreSQL is running
 docker-compose ps postgres
-# View logs
 docker-compose logs postgres --tail=20
 ```
 
 ---
 
-## 📚 Next Steps
+## License
 
-- [ ] Deploy to AWS EKS
-- [ ] Integrate OpenAI GPT-4 for better reasoning
-- [ ] Add persistent session storage
-- [ ] Implement user authentication
-- [ ] Add rate limiting
-- [ ] Set up monitoring with Prometheus/Grafana
-- [ ] Create advanced test scenarios (20+ workflows)
-- [ ] Optimize embedding model
-- [ ] Add voice input support
-
----
-
-## 📄 License
-
-MIT License - See LICENSE file
-
-## 🤝 Contributing
-
-Contributions welcome! Please:
-1. Fork the repo
-2. Create feature branch
-3. Add tests
-4. Submit PR
-
----
-
-**Built with ❤️ for the future of AI agents.**
-
-### Running Tests
-
-#### Option 1: Inside Docker (Recommended)
-```bash
-# Run all tests
-docker-compose exec api pytest -v
-
-# Run specific test file
-docker-compose exec api pytest tests/test_basic.py -v
-
-# Run with coverage
-docker-compose exec api pytest --cov=app --cov-report=html
-```
-
-#### Option 2: On Host Machine
-```bash
-# Install dependencies locally
-pip install -r requirements.txt
-
-# Set Python path and run tests
-PYTHONPATH=. pytest -v
-PYTHONPATH=. pytest tests/test_basic.py -v
-
-# Or use pytest.ini (automatically sets path)
-pytest -v
-pytest tests/test_basic.py -v
-```
-
-#### Option 3: Direct Python execution (not recommended)
-```bash
-# This requires manual PYTHONPATH setup
-PYTHONPATH=. python -m pytest tests/test_basic.py -v
-```
+MIT
